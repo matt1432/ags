@@ -1,5 +1,6 @@
 {
   inputs = {
+    systems.url = "github:nix-systems/default-linux";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     astal = {
@@ -10,22 +11,24 @@
 
   outputs = {
     self,
+    systems,
     nixpkgs,
     astal,
   }: let
-    systems = ["x86_64-linux" "aarch64-linux"];
-    forAllSystems = nixpkgs.lib.genAttrs systems;
+    perSystem = attrs:
+      nixpkgs.lib.genAttrs (import systems) (system:
+        attrs (import nixpkgs {inherit system;}));
   in {
     lib.bundle = import ./nix/bundle.nix {
       inherit self;
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
     };
 
-    packages = forAllSystems (
-      system: let
+    packages = perSystem (
+      pkgs: let
+        inherit (pkgs) system;
         inherit (astal.packages.${system}) astal3 astal4 io gjs;
 
-        pkgs = nixpkgs.legacyPackages.${system};
         astal-io = io;
         astal-gjs = "${gjs}/share/astal/gjs";
 
@@ -61,9 +64,7 @@
       ags = import ./nix/hm-module.nix self;
     };
 
-    devShells = forAllSystems (system: let
-      pkgs = nixpkgs.legacyPackages.${system};
-    in {
+    devShells = perSystem (pkgs: {
       default = pkgs.mkShell {
         packages = with pkgs; [
           markdownlint-cli2
