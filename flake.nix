@@ -78,5 +78,7 @@
         ];
       };
     });
+
+    formatter = perSystem (pkgs: pkgs.alejandra);
   };
 }
