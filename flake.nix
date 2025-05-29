@@ -17,36 +17,51 @@
   }: let
     perSystem = attrs:
       nixpkgs.lib.genAttrs (import systems) (system:
-        attrs (import nixpkgs {inherit system;}));
+        attrs (import nixpkgs {
+          inherit system;
+          overlays = [
+            astal.overlays.default
+            self.overlays.default
+          ];
+        }));
   in {
+    # TODO: use overlays here
     lib.bundle = import ./nix/bundle.nix {
       inherit self;
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
     };
 
-    packages = perSystem (
-      pkgs: let
-        inherit (pkgs) system;
-        inherit (astal.packages.${system}) astal3 astal4 io gjs;
+    packages = perSystem (pkgs:
+      pkgs.astal
+      // {
+        inherit (pkgs) ags agsFull;
+        default = pkgs.ags;
+      });
+
+    overlays = {
+      ags = final: prev: let
+        inherit (final.astal) astal3 astal4 io gjs;
 
         astal-io = io;
         astal-gjs = "${gjs}/share/astal/gjs";
-
-        agsPackages = {
-          default = self.packages.${system}.ags;
-          ags = pkgs.callPackage ./nix {
-            inherit astal3 astal4 astal-io astal-gjs;
-          };
-          agsFull = pkgs.callPackage ./nix {
-            inherit astal3 astal4 astal-io astal-gjs;
-            extraPackages = builtins.attrValues (
-              builtins.removeAttrs astal.packages.${system} ["docs"]
-            );
-          };
+      in {
+        ags = final.callPackage ./nix {
+          inherit astal3 astal4 astal-io astal-gjs;
         };
-      in
-        astal.packages.${system} // agsPackages
-    );
+        agsFull = final.callPackage ./nix {
+          inherit astal3 astal4 astal-io astal-gjs;
+          extraPackages = builtins.attrValues (
+            builtins.removeAttrs final.astal [
+              "docs"
+              "buildAstalModule"
+              "docs"
+              "source"
+            ]
+          );
+        };
+      };
+      default = self.overlays.ags;
+    };
 
     templates.default = {
       path = ./nix/template;
